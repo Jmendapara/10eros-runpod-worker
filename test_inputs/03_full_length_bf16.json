@@ -183,7 +183,7 @@
       "153:122": {
         "inputs": {
           "video_latent": [
-            "153:121",
+            "i2v:inplace_lo",
             0
           ],
           "audio_latent": [
@@ -270,7 +270,7 @@
       "153:129": {
         "inputs": {
           "video_latent": [
-            "153:130",
+            "i2v:inplace_hi",
             0
           ],
           "audio_latent": [
@@ -529,6 +529,63 @@
         "class_type": "LTXAVTextEncoderLoader",
         "_meta": {
           "title": "LTXV Audio Text Encoder Loader"
+        }
+      },
+      "i2v:preprocess": {
+        "inputs": {
+          "image": [
+            "153:124",
+            0
+          ],
+          "padding": 18
+        },
+        "class_type": "LTXVPreprocess",
+        "_meta": {
+          "title": "LTXV Preprocess (i2v)"
+        }
+      },
+      "i2v:inplace_lo": {
+        "inputs": {
+          "vae": [
+            "153:146",
+            2
+          ],
+          "image": [
+            "i2v:preprocess",
+            0
+          ],
+          "latent": [
+            "153:121",
+            0
+          ],
+          "strength": 0.7,
+          "bypass": false
+        },
+        "class_type": "LTXVImgToVideoInplace",
+        "_meta": {
+          "title": "LTXV Img\u2192Video Inplace (low-res, str=0.7)"
+        }
+      },
+      "i2v:inplace_hi": {
+        "inputs": {
+          "vae": [
+            "153:146",
+            2
+          ],
+          "image": [
+            "i2v:preprocess",
+            0
+          ],
+          "latent": [
+            "153:130",
+            0
+          ],
+          "strength": 1.0,
+          "bypass": false
+        },
+        "class_type": "LTXVImgToVideoInplace",
+        "_meta": {
+          "title": "LTXV Img\u2192Video Inplace (hi-res, str=1.0)"
         }
       }
     },
