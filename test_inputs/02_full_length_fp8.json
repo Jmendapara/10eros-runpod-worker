@@ -537,7 +537,7 @@
             "153:124",
             0
           ],
-          "padding": 18
+          "img_compression": 18
         },
         "class_type": "LTXVPreprocess",
         "_meta": {
