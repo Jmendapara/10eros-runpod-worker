@@ -5,18 +5,26 @@ set -euo pipefail
 # Build the 10eros-runpod-worker Docker image on a build host (Hetzner,
 # RunPod GPU Pod, anywhere with Docker + buildx) and push to Docker Hub.
 #
-# Usage:
+# This script is self-contained: it clones the repo into /tmp itself, so the
+# typical usage is `curl | bash` directly from GitHub (no local checkout needed).
+#
+# Usage (curl from GitHub — recommended):
 #
 #   export DOCKERHUB_USERNAME="your-dockerhub-user"
 #   export DOCKERHUB_TOKEN="your-dockerhub-access-token"
 #   export IMAGE_TAG="your-user/10eros-runpod-worker:latest"
 #   export MODEL_VARIANT=fp8   # or bf16
-#   bash build-on-pod.sh
+#   curl -fsSL https://raw.githubusercontent.com/Jmendapara/10eros-runpod-worker/main/scripts/build-on-pod.sh | bash
+#
+# Usage (local checkout):
+#
+#   bash scripts/build-on-pod.sh
 #
 # Optional:
 #   CUDA_LEVEL=12.8                # Use CUDA 12.8 base for Blackwell (RTX PRO 6000 96 GB)
 #   PYTORCH_VERSION=2.5.0          # Pin PyTorch; default is "latest" on the index
-#   BRANCH=main                    # Git branch to build from
+#   BRANCH=main                    # Git branch to build from (the script always
+#                                  #   clones from REPO_URL, never the cwd)
 #   REPO_URL=...                   # Override for forks
 #   HUGGINGFACE_ACCESS_TOKEN=...   # Pass through if Lightricks/LTX-2.3 is gated
 #

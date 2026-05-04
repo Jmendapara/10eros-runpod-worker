@@ -122,6 +122,8 @@ docker compose up
 
 ## Building on a build host (Hetzner / RunPod GPU pod)
 
+The script clones the repo itself into `/tmp`, so you don't need a local checkout — pipe it straight from GitHub:
+
 ```bash
 export DOCKERHUB_USERNAME=...
 export DOCKERHUB_TOKEN=...
@@ -130,8 +132,10 @@ export MODEL_VARIANT=fp8     # or bf16
 # Optional: export HUGGINGFACE_ACCESS_TOKEN=... if Lightricks/LTX-2.3 gates
 # Optional: export CUDA_LEVEL=12.8 for Blackwell GPUs
 
-bash scripts/build-on-pod.sh
+curl -fsSL https://raw.githubusercontent.com/Jmendapara/10eros-runpod-worker/main/scripts/build-on-pod.sh | bash
 ```
+
+If you're already on a local checkout, you can also just run `bash scripts/build-on-pod.sh` — same result, the script always reclones from `REPO_URL` (default: `Jmendapara/10eros-runpod-worker`) into `/tmp/10eros-build-workspace` so it never picks up uncommitted changes.
 
 The script handles Docker installation, Docker Hub login, repo clone, build, and push. Script is idempotent — re-running it is safe.
 
