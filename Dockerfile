@@ -16,12 +16,17 @@ ENV PIP_PREFER_BINARY=1
 ENV PYTHONUNBUFFERED=1
 ENV CMAKE_BUILD_PARALLEL_LEVEL=8
 
-# System dependencies
-RUN apt-get update && apt-get install -y \
+# System dependencies. --no-install-recommends keeps the image lean (no
+# pocketsphinx, va-driver-all, vdpau-driver-all, etc. that ffmpeg's Recommends
+# list otherwise drags in) AND sidesteps Ubuntu mirror flakes for those
+# unneeded packages. Acquire::Retries handles transient mirror 5xx/timeouts.
+RUN apt-get update -o Acquire::Retries=3 && \
+    apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
     python3.12 \
     python3.12-venv \
     git \
     wget \
+    ca-certificates \
     libgl1 \
     libglib2.0-0 \
     libsm6 \
