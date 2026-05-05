@@ -3,7 +3,7 @@
     "workflow": {
       "75": {
         "inputs": {
-          "filename_prefix": "video/10Eros_bf16",
+          "filename_prefix": "video/10Eros_smoke",
           "format": "auto",
           "codec": "auto",
           "video": [
@@ -211,7 +211,7 @@
       },
       "153:125": {
         "inputs": {
-          "value": 241
+          "value": 25
         },
         "class_type": "PrimitiveInt",
         "_meta": {
@@ -333,7 +333,7 @@
       },
       "153:132": {
         "inputs": {
-          "text": "The woman removes her pants and then gets on her knees and starts sucking a man's dick",
+          "text": "The subject smiles slightly. Subtle motion. (Inline base64 input.)",
           "clip": [
             "153:147",
             0
@@ -366,7 +366,7 @@
       },
       "153:134": {
         "inputs": {
-          "ckpt_name": "10Eros_v1_bf16.safetensors"
+          "ckpt_name": "10Eros_v1_fp8_transformer.safetensors"
         },
         "class_type": "LTXVAudioVAELoader",
         "_meta": {
@@ -513,7 +513,7 @@
       },
       "153:146": {
         "inputs": {
-          "ckpt_name": "10Eros_v1_bf16.safetensors"
+          "ckpt_name": "10Eros_v1_fp8_transformer.safetensors"
         },
         "class_type": "CheckpointLoaderSimple",
         "_meta": {
@@ -523,7 +523,7 @@
       "153:147": {
         "inputs": {
           "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
-          "ckpt_name": "10Eros_v1_bf16.safetensors",
+          "ckpt_name": "10Eros_v1_fp8_transformer.safetensors",
           "device": "default"
         },
         "class_type": "LTXAVTextEncoderLoader",
@@ -589,13 +589,14 @@
         }
       }
     },
-    "r2_inputs": [
+    "uid": "inline_demo",
+    "images": [
       {
         "node_id": "153:124",
         "input_field": "image",
-        "r2_key": "refs/test_image.jpg"
+        "name": "ref.png",
+        "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
       }
-    ],
-    "uid": "user_demo"
+    ]
   }
 }

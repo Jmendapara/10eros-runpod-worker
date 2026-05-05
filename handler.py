@@ -196,18 +196,35 @@ def validate_input(job_input):
     """
     Validate the 10Eros i2v job input.
 
+    Each request must supply at least one input image — via R2 (`r2_inputs`)
+    OR inline base64 (`images`), or a mix of both. Both arrays follow the
+    same node_id+input_field rewriting pattern; they only differ in how the
+    file bytes are sourced.
+
     Expected shape:
         {
             "workflow": { /* ComfyUI workflow JSON */ },
             "r2_inputs": [
-                { "node_id": "16", "input_field": "image", "r2_key": "refs/character.png" }
+                { "node_id": "153:124", "input_field": "image",
+                  "r2_key": "refs/character.png" }
+            ],
+            "images": [
+                { "node_id": "153:124", "input_field": "image",
+                  "name": "ref.png",
+                  "image": "iVBORw0KGgo..."  // raw base64 OR data URI
+                }
             ],
             "uid": "optional-user-id",
             "comfy_org_api_key": "optional"
         }
 
-    `r2_inputs` is REQUIRED and non-empty: this worker is i2v-only, every
-    request must reference at least one R2-hosted input file.
+    Validation:
+      - At least one of r2_inputs / images must be a non-empty list.
+      - Each entry in either array must include node_id + input_field plus
+        its source-specific fields (r2_key for r2_inputs; name + image for
+        images).
+      - (node_id, input_field) pairs must not collide across the two arrays
+        — otherwise the second processed would silently overwrite the first.
     """
     if job_input is None:
         return None, "Please provide input"
@@ -222,13 +239,20 @@ def validate_input(job_input):
     if workflow is None:
         return None, "Missing 'workflow' parameter"
 
-    r2_inputs = job_input.get("r2_inputs")
-    if r2_inputs is None:
-        return None, "'r2_inputs' is required and must contain at least one entry (i2v-only)"
+    r2_inputs = job_input.get("r2_inputs") or []
+    images = job_input.get("images") or []
+
     if not isinstance(r2_inputs, list):
         return None, "'r2_inputs' must be a list"
-    if len(r2_inputs) == 0:
-        return None, "'r2_inputs' must contain at least one entry (i2v-only)"
+    if not isinstance(images, list):
+        return None, "'images' must be a list"
+
+    if len(r2_inputs) == 0 and len(images) == 0:
+        return None, (
+            "At least one input image required: provide 'r2_inputs' (R2 keys) "
+            "or 'images' (inline base64), or a mix of both."
+        )
+
     for i, entry in enumerate(r2_inputs):
         if not isinstance(entry, dict):
             return None, f"r2_inputs[{i}] must be an object"
@@ -238,6 +262,25 @@ def validate_input(job_input):
                     None,
                     f"r2_inputs[{i}] is missing required field '{req}'",
                 )
+
+    for i, entry in enumerate(images):
+        if not isinstance(entry, dict):
+            return None, f"images[{i}] must be an object"
+        for req in ("node_id", "input_field", "name", "image"):
+            if req not in entry:
+                return None, f"images[{i}] is missing required field '{req}'"
+
+    # Detect (node_id, input_field) collisions across the two arrays.
+    seen = set()
+    for arr_name, arr in (("r2_inputs", r2_inputs), ("images", images)):
+        for i, entry in enumerate(arr):
+            key = (str(entry["node_id"]), entry["input_field"])
+            if key in seen:
+                return None, (
+                    f"{arr_name}[{i}] targets node_id={key[0]}, input_field={key[1]} "
+                    f"which is already targeted by an earlier entry — pick one source."
+                )
+            seen.add(key)
 
     uid = job_input.get("uid")
     if uid is not None:
@@ -251,6 +294,7 @@ def validate_input(job_input):
     return {
         "workflow": workflow,
         "r2_inputs": r2_inputs,
+        "images": images,
         "uid": uid,
         "comfy_org_api_key": comfy_org_api_key,
     }, None
@@ -382,6 +426,59 @@ def process_r2_inputs(workflow, r2_inputs):
         workflow[node_id]["inputs"][field] = filename
 
     print(f"worker-comfyui - R2 inputs ready.")
+
+
+def process_images(workflow, images):
+    """
+    Decode each base64 inline image, write to /comfyui/input/<basename>,
+    and rewrite the corresponding field in the workflow to reference the
+    local filename. Mirrors process_r2_inputs but sources bytes from the
+    request payload instead of R2.
+    """
+    if not images:
+        return
+
+    os.makedirs(COMFY_INPUT_DIR, exist_ok=True)
+
+    print(f"worker-comfyui - Decoding {len(images)} inline image(s)...")
+    for entry in images:
+        node_id = str(entry["node_id"])
+        field = entry["input_field"]
+        name = entry["name"]
+        image_data = entry["image"]
+
+        if node_id not in workflow:
+            raise ValueError(
+                f"images references node_id '{node_id}' which is not in the workflow"
+            )
+        if "inputs" not in workflow[node_id]:
+            raise ValueError(
+                f"Workflow node '{node_id}' has no 'inputs' dict to populate"
+            )
+
+        # Strip Data URI prefix if present ("data:image/png;base64,XXX") so callers
+        # can paste either raw base64 or the more user-friendly data URI form.
+        if "," in image_data and image_data.startswith("data:"):
+            image_data = image_data.split(",", 1)[1]
+
+        try:
+            file_bytes = base64.b64decode(image_data)
+        except Exception as e:
+            raise ValueError(f"images entry for node {node_id}.{field} has invalid base64: {e}")
+
+        # Strip any path components from the user-supplied name to prevent traversal.
+        filename = os.path.basename(name)
+        local_path = os.path.join(COMFY_INPUT_DIR, filename)
+
+        with open(local_path, "wb") as f:
+            f.write(file_bytes)
+
+        print(
+            f"worker-comfyui - inline image: {filename} ({len(file_bytes)} bytes) -> {local_path} (node {node_id}.{field})"
+        )
+        workflow[node_id]["inputs"][field] = filename
+
+    print(f"worker-comfyui - Inline images ready.")
 
 
 # ---------------------------------------------------------------------------
@@ -532,6 +629,7 @@ def handler(job):
 
     workflow = validated_data["workflow"]
     r2_inputs = validated_data["r2_inputs"]
+    images = validated_data["images"]
     uid = validated_data.get("uid")
 
     if not check_server(
@@ -543,13 +641,22 @@ def handler(job):
             "error": f"ComfyUI server ({COMFY_HOST}) not reachable after multiple retries."
         }
 
-    # Download R2 inputs and rewrite the workflow to point at local filenames.
+    # Materialize R2 inputs (download from bucket) and inline images (decode
+    # base64) into /comfyui/input/, rewriting the workflow to reference the
+    # local filenames in both cases.
     try:
         process_r2_inputs(workflow, r2_inputs)
     except Exception as e:
         print(f"worker-comfyui - R2 input download failed: {e}")
         print(traceback.format_exc())
         return {"error": f"Failed to download R2 inputs: {e}"}
+
+    try:
+        process_images(workflow, images)
+    except Exception as e:
+        print(f"worker-comfyui - Inline image decode failed: {e}")
+        print(traceback.format_exc())
+        return {"error": f"Failed to process inline images: {e}"}
 
     ws = None
     client_id = str(uuid.uuid4())

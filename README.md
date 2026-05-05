@@ -39,17 +39,26 @@ The build script auto-suffixes the tag with the variant if it isn't already ther
 
 ## Request shape
 
+The worker is i2v-only — every request must reference at least one input image. Images can be sourced from R2 (`r2_inputs`) or sent inline as base64 (`images`), or any mix of the two. The handler decides which path to use per entry by which field is populated.
+
 ```jsonc
 {
   "input": {
     // REQUIRED. ComfyUI workflow JSON in API format (Workflow → Save (API Format) in ComfyUI).
     "workflow": { "<node_id>": { "class_type": "...", "inputs": {...} }, ... },
 
-    // REQUIRED, non-empty. Each entry downloads the R2 object at r2_key into
-    // /comfyui/input/<basename> and rewrites workflow[node_id].inputs[input_field]
-    // to the local filename. Always at least one entry — this worker is i2v-only.
+    // OPTIONAL — but at least one of `r2_inputs` or `images` must be a non-empty list.
+    // Each entry downloads the R2 object at r2_key into /comfyui/input/<basename> and
+    // rewrites workflow[node_id].inputs[input_field] to the local filename.
     "r2_inputs": [
       { "node_id": "153:124", "input_field": "image", "r2_key": "refs/dog.png" }
+    ],
+
+    // OPTIONAL — inline base64. Each entry decodes `image` and writes it to
+    // /comfyui/input/<name>, then rewrites workflow[node_id].inputs[input_field].
+    // The `image` value can be raw base64 OR a "data:image/png;base64,..." URI.
+    "images": [
+      { "node_id": "153:124", "input_field": "image", "name": "ref.png", "image": "iVBORw0KGgo..." }
     ],
 
     // OPTIONAL. When present, output keys go to users/<uid>/generations/<8char>.<ext>
@@ -62,7 +71,13 @@ The build script auto-suffixes the tag with the variant if it isn't already ther
 }
 ```
 
-A complete example workflow lives in `test_input_fp8.json` / `test_input_bf16.json`. The two files differ only in the `ckpt_name` strings — same prompt, same r2_inputs, same seed — making them suitable for A/B comparison.
+**`r2_inputs` vs `images` — when to use which:**
+- **`r2_inputs`** — when the source image already lives in your R2 bucket (the typical production flow: user uploads to your app, your backend stages it in R2, then triggers the worker). No upload happens on the request itself, so the request body stays small.
+- **`images`** — when you have the bytes locally and want to skip the R2 round-trip (good for ad-hoc testing, one-off generations, or when you don't have an R2 staging step). RunPod has request-size limits (~10 MB at the time of writing); base64 inflates by ~33%, so practical max is around 7 MB of source image.
+
+Both arrays use the same `(node_id, input_field)` pattern to point at the workflow node receiving the file. Sending both arrays in one request is fine — just don't have two entries target the same `(node_id, input_field)` (the handler will reject that as a collision).
+
+A complete example workflow lives in `test_input_fp8.json` / `test_input_bf16.json` (R2 path) and `test_inputs/11_inline_image_fp8.json` (inline path). The two checkpoint variants differ only in `ckpt_name` — same prompt, same seed — making them suitable for A/B comparison.
 
 ## Response shape
 

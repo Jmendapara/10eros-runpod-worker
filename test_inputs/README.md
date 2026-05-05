@@ -57,6 +57,7 @@ curl -X POST http://127.0.0.1:8000/runsync \
 | `03_full_length_bf16.json` | bf16 | 121 frames (~5 s) | Same prompt + seed as `02`, against the bf16 endpoint. Compare quality side-by-side. |
 | `04_no_uid_fp8.json` | fp8 | 49 frames (~2 s) | Omits `uid` — output key lands at `<job_id>/<8char>.mp4` instead of `users/<uid>/generations/<8char>.mp4`. Verifies the prefix fallback. |
 | `05_custom_seed_and_prompt_fp8.json` | fp8 | 49 frames (~2 s) | Demonstrates how to set `RandomNoise.noise_seed` (nodes `153:127` + `153:151`) for reproducibility, and how the prompt drives the motion description. |
+| `11_inline_image_fp8.json` | fp8 | 25 frames (~1 s) | **Inline base64** input via the `images` field instead of `r2_inputs`. The shipped file references a 1×1 placeholder PNG — replace `images[0].image` with your real image's base64 before sending. Useful when the caller already has the image bytes in memory and would rather skip the R2 round-trip. |
 
 ### Error paths (expect `{ "error": "..." }` in response)
 
@@ -64,8 +65,8 @@ These exist so you can verify the worker degrades gracefully and the error messa
 
 | File | Expected response |
 |---|---|
-| `06_error_missing_r2_inputs.json` | `{ "error": "'r2_inputs' is required and must contain at least one entry (i2v-only)" }` |
-| `07_error_empty_r2_inputs.json` | `{ "error": "'r2_inputs' must contain at least one entry (i2v-only)" }` |
+| `06_error_missing_r2_inputs.json` | `{ "error": "At least one input image required: provide 'r2_inputs' (R2 keys) or 'images' (inline base64), or a mix of both." }` |
+| `07_error_empty_r2_inputs.json` | Same message as 06 (empty `r2_inputs` + no `images` is equivalent to neither field present). |
 | `08_error_bogus_r2_key.json` | `{ "error": "Failed to download R2 inputs: An error occurred (404) when calling the GetObject operation..." }` |
 | `09_error_unknown_node_id.json` | `{ "error": "Failed to download R2 inputs: r2_inputs references node_id '999' which is not in the workflow" }` |
 | `10_error_unknown_checkpoint.json` | ComfyUI 400 surfaced via `queue_workflow` — should list the unknown checkpoint and (helpfully) the available alternatives. |
