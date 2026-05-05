@@ -9,7 +9,7 @@
     "containerDiskInGb": 80,
     "gpuIds": "H100_80,A100_80",
     "gpuCount": 1,
-    "allowedCudaVersions": ["12.7", "12.6"],
+    "allowedCudaVersions": ["12.8", "12.7", "12.6"],
     "env": [
       {
         "key": "BUCKET_ENDPOINT_URL",

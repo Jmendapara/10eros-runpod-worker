@@ -10,8 +10,6 @@ on:
         options:
           - 10eros-fp8
           - 10eros-bf16
-          - 10eros-fp8-blackwell
-          - 10eros-bf16-blackwell
         default: "10eros-fp8"
       version:
         description: "Image version tag (e.g., 1.0.0 or latest)"

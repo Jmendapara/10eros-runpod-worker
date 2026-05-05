@@ -21,7 +21,10 @@ set -euo pipefail
 #   bash scripts/build-on-pod.sh
 #
 # Optional:
-#   CUDA_LEVEL=12.8                # Use CUDA 12.8 base for Blackwell (RTX PRO 6000 96 GB)
+#   CUDA_LEVEL=12.6                # Force older CUDA 12.6 base (default is 12.8;
+#                                  #   12.8 covers Ampere/Ada/Hopper/Blackwell, so
+#                                  #   you only need 12.6 for hosts pinned to an
+#                                  #   older driver)
 #   PYTORCH_VERSION=2.5.0          # Pin PyTorch; default is "latest" on the index
 #   BRANCH=main                    # Git branch to build from (the script always
 #                                  #   clones from REPO_URL, never the cwd)
@@ -53,7 +56,7 @@ fi
 
 # Auto-suffix the IMAGE_TAG with the variant if the user didn't already include
 # it. This makes it safe to alternate fp8/bf16 builds with a single IMAGE_TAG.
-if ! echo "${IMAGE_TAG}" | grep -qE "(:|\-)(fp8|bf16)(\-blackwell)?$"; then
+if ! echo "${IMAGE_TAG}" | grep -qE "(:|\-)(fp8|bf16)$"; then
     IMAGE_TAG="${IMAGE_TAG}-${MODEL_VARIANT}"
     echo "       (auto-suffixed IMAGE_TAG → ${IMAGE_TAG})"
 fi
@@ -65,7 +68,7 @@ echo "  Repo:         ${REPO_URL}"
 echo "  Branch:       ${BRANCH}"
 echo "  ComfyUI ver:  ${COMFYUI_VERSION}"
 echo "  Image tag:    ${IMAGE_TAG}"
-echo "  CUDA level:   ${CUDA_LEVEL:-12.6}"
+echo "  CUDA level:   ${CUDA_LEVEL:-12.8}"
 echo "  Variant:      ${MODEL_VARIANT}"
 echo "============================================="
 
@@ -117,18 +120,10 @@ if [ -n "${HUGGINGFACE_ACCESS_TOKEN:-}" ]; then
     BUILD_ARGS+=(--build-arg "HUGGINGFACE_ACCESS_TOKEN=${HUGGINGFACE_ACCESS_TOKEN}")
 fi
 
-CUDA_LEVEL="${CUDA_LEVEL:-12.6}"
+CUDA_LEVEL="${CUDA_LEVEL:-12.8}"
 PYTORCH_VERSION="${PYTORCH_VERSION:-}"
 
-if [ "${CUDA_LEVEL}" = "12.8" ]; then
-    BUILD_ARGS+=(
-        --build-arg "BASE_IMAGE=nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04"
-        --build-arg "ENABLE_PYTORCH_UPGRADE=true"
-        --build-arg "PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu128"
-        --build-arg "PYTORCH_VERSION=${PYTORCH_VERSION}"
-    )
-    echo "       Using CUDA 12.8 base + PyTorch cu128 (Blackwell; driver >= 570)"
-else
+if [ "${CUDA_LEVEL}" = "12.6" ]; then
     BUILD_ARGS+=(
         --build-arg "BASE_IMAGE=nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04"
         --build-arg "CUDA_VERSION_FOR_COMFY=12.6"
@@ -136,7 +131,16 @@ else
         --build-arg "PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu126"
         --build-arg "PYTORCH_VERSION=${PYTORCH_VERSION}"
     )
-    echo "       Using CUDA 12.6 base + PyTorch cu126 (A100/H100; driver >= 560)"
+    echo "       Using CUDA 12.6 base + PyTorch cu126 (A100/H100 only; driver >= 560)"
+else
+    BUILD_ARGS+=(
+        --build-arg "BASE_IMAGE=nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04"
+        --build-arg "CUDA_VERSION_FOR_COMFY=12.8"
+        --build-arg "ENABLE_PYTORCH_UPGRADE=true"
+        --build-arg "PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu128"
+        --build-arg "PYTORCH_VERSION=${PYTORCH_VERSION}"
+    )
+    echo "       Using CUDA 12.8 base + PyTorch cu128 (Ampere/Ada/Hopper/Blackwell; driver >= 570)"
 fi
 
 # Free disk before build
@@ -163,12 +167,12 @@ echo ""
 echo "  Next steps:"
 echo "    1. https://www.runpod.io/console/serverless"
 echo "    2. Create endpoint with container image: ${IMAGE_TAG}"
-if [ "${CUDA_LEVEL}" = "12.8" ]; then
-    echo "    3. Pick GPU: RTX PRO 6000 Blackwell 96 GB"
+if [ "${CUDA_LEVEL}" = "12.6" ]; then
+    echo "    3. Pick GPU: H100 80 GB or A100 80 GB (Blackwell needs CUDA 12.8 build)"
 elif [ "${MODEL_VARIANT}" = "bf16" ]; then
     echo "    3. Pick GPU: H100 80 GB or RTX PRO 6000 96 GB (bf16 is tight on A100 80 GB)"
 else
-    echo "    3. Pick GPU: H100 80 GB or A100 80 GB"
+    echo "    3. Pick GPU: H100 80 GB, A100 80 GB, or RTX PRO 6000 96 GB"
 fi
 echo "    4. Container disk: $([ "${MODEL_VARIANT}" = "bf16" ] && echo 120 || echo 80) GB"
 echo "    5. Set Min Workers=0, Max Workers=1"
